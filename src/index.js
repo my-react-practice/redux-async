@@ -4,7 +4,7 @@ import './index.css';
 import App from './App';
 import * as serviceWorker from './serviceWorker';
 
-import thunkMiddleware from 'redux-thunk';
+// import thunkMiddleware from 'redux-thunk';
 // import { createLogger } from 'redux-logger';
 import { createStore, applyMiddleware } from 'redux';
 import { selectSubreddit, fetchPostsIfNeeded } from './actions';
@@ -16,9 +16,9 @@ Sentry.init({ dsn: 'https://0301bba566454e6d8f94de41386a3090@sentry.io/1332331' 
 
 // const loggerMiddleware = createLogger();
 
-const store = createStore(rootReducer, applyMiddleware(thunkMiddleware));
+// const store = createStore(rootReducer, applyMiddleware(thunkMiddleware, loggerMiddleware));
 
-/* section 1 */
+/* Attempt 1 */
 
 // const next = store.dispatch;
 // store.dispatch = function dispatchAndLog(action) {
@@ -28,7 +28,7 @@ const store = createStore(rootReducer, applyMiddleware(thunkMiddleware));
 //   return result;
 // };
 
-/* section 2 */
+/* Attempt 2 */
 
 // function patchStoreToAddLogging(store) {
 //   const next = store.dispatch;
@@ -42,7 +42,7 @@ const store = createStore(rootReducer, applyMiddleware(thunkMiddleware));
 
 // patchStoreToAddLogging(store);
 
-/* section 3 */
+/* Attempt 3 */
 
 // function patchStoreToAddLogging(store) {
 //   const next = store.dispatch;
@@ -70,46 +70,74 @@ const store = createStore(rootReducer, applyMiddleware(thunkMiddleware));
 // patchStoreToAddLogging(store);
 // patchStoreToAddCrashReporting(store);
 
-/* section 4 */
+/* Attempt 4 */
 
-function logger(store) {
-  const next = store.dispatch;
-  // store.dispatch = function dispatchAndLog(action) {
-  return function dispatchAndLog(action) {
-    console.log('dispatching', action);
-    let result = next(action);
-    console.log('next state', store.getState());
-    return result;
-  };
-}
+// function logger(store) {
+//   const next = store.dispatch;
+//   // store.dispatch = function dispatchAndLog(action) {
+//   return function dispatchAndLog(action) {
+//     console.log('dispatching', action);
+//     let result = next(action);
+//     console.log('next state', store.getState());
+//     return result;
+//   };
+// }
 
-function crashReporter(store) {
-  const next = store.dispatch;
-  // store.dispatch = function dispatchAndReportErrors(action) {
-  return function dispatchAndReportErrors(action) {
-    try {
+// function crashReporter(store) {
+//   const next = store.dispatch;
+//   // store.dispatch = function dispatchAndReportErrors(action) {
+//   return function dispatchAndReportErrors(action) {
+//     try {
+//       return next(action);
+//     } catch (err) {
+//       console.error('Caught an exception!', err);
+//       Sentry.captureException(err);
+//       throw err;
+//     }
+//   };
+// }
+
+// function applyMiddlewareByMonkeypatching(store, middlewares) {
+//   middlewares = middlewares.slice();
+//   middlewares.reverse();
+
+//   middlewares.forEach(middleware => (store.dispatch = middleware(store)));
+// }
+
+// applyMiddlewareByMonkeypatching(store, [logger, crashReporter]);
+
+/* Attempt 5 */
+const logger = store => next => action => {
+  console.log('prev state', store.getState());
+  console.log('dispatching', action);
+  let result = next(action);
+  console.log('next state', store.getState());
+  return result;
+};
+
+const crashReporter = ({ dispatch, getState }) => next => action => {
+  try {
+    if (typeof action === 'function') {
+      return action(dispatch, getState);
+    } else {
       return next(action);
-    } catch (err) {
-      console.error('Caught an exception!', err);
-      Sentry.captureException(err);
-      throw err;
     }
-  };
-}
+  } catch (err) {
+    console.error('Caught an exception!', err);
+    Sentry.captureException(err);
+    throw err;
+  }
+};
 
-function applyMiddlewareByMonkeypatching(store, middlewares) {
-  middlewares = middlewares.slice();
-  middlewares.reverse();
+// function applyMiddlewareByMonkeypatching(store, middlewares) {
+//   middlewares = middlewares.slice()
+//   middlewares.reverse()
+//   let dispatch = store.dispatch
+//   middlewares.forEach(middleware => (dispatch = middleware(store)(dispatch)))
+//   return Object.assign({}, store, { dispatch })
+// }
 
-  middlewares.forEach(middleware => (store.dispatch = middleware(store)));
-}
-
-applyMiddlewareByMonkeypatching(store, [logger, crashReporter]);
-
-/* section 5 */
-
-
-
+const store = createStore(rootReducer, applyMiddleware(logger, crashReporter));
 
 store.dispatch(selectSubreddit('reactjs'));
 store.dispatch(fetchPostsIfNeeded('reactjs')).then(() => console.log(store.getState()));
